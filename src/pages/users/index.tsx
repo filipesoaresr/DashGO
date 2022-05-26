@@ -1,38 +1,24 @@
 
-import { Box, Button, Checkbox, Flex, Heading, Icon, Table, Tbody, Td, Th, Thead, Tr, Text, useBreakpointValue, Spinner } from "@chakra-ui/react";
+import { Box, Button, Checkbox, Flex, Heading, Icon, Table, Tbody, Td, Th, Thead, Tr, Text, useBreakpointValue, Spinner, Link as ChakraLink } from "@chakra-ui/react";
 import { RiAddLine, RiPencilLine } from "react-icons/ri";
 import { Header } from "../../components/Header";
 import Sidebar from "../../components/Sidebar";
 import Pagination from "../../components/Pagination";
 import Link from "next/link";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "react-query" 
+import { api } from "../../services/api";
+import { getUsers, useUsers } from "../../services/hooks/useUsers";
+import { queryClient } from "../../services/queryClient";
+import { GetServerSideProps } from "next/types";
+
  
 
 export default function UserList() {
 
-    const { data, isLoading, error } = useQuery('users', async () => {
-        
-        const response = await fetch('http://localhost:3000/api/users')
-        const data = await response.json();
-
-
-        const users = data.users.map(user => {
-            return {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                createdAt: new Date(user.createdAt).toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric',
-                })
-            }      
-        })
-
-        return users;
-    })
+    const [ page, setPage ] = useState(1)
+    const { data, isLoading, isFetching, error } = useUsers(page)
 
 
     const isWideVersion = useBreakpointValue({
@@ -40,8 +26,16 @@ export default function UserList() {
         lg: true,
     });
 
-    
-    
+    async function handlePrefetchUser(userId: string) {
+        await queryClient.prefetchQuery(['users', userId], async () => {
+            const response = await api.get(`users/${userId}`)
+
+            return response.data;
+        }, {
+            staleTime: 1000 * 60 * 10 // 10 minutes
+        });
+    }
+
     return(
         <Box>
             <Header />
@@ -52,7 +46,12 @@ export default function UserList() {
                 <Box flex="1" borderRadius={8} bg="gray.800" p="8">
                     
                     <Flex mb="8" justify="space-between" align="center">
-                        <Heading size="lg" fontWeight="normal">Usuários</Heading>
+                        <Heading size="lg" fontWeight="normal">
+
+                            Usuários
+                            { !isLoading && isFetching && <Spinner size="sm" color="gray.500" ml="4" /> }
+
+                        </Heading>
                         
                         <Link href="/users/create" passHref>
                             <Button
@@ -90,7 +89,7 @@ export default function UserList() {
                                         </Thead>
                                         <Tbody>
 
-                                            { data.map(user => {
+                                            { data.users.map(user => {
                                                 return (
                                                     <Tr key={user.id}>
                                                         <Td px={["4", "4", "6"]}>
@@ -98,7 +97,9 @@ export default function UserList() {
                                                         </Td>
                                                         <Td>
                                                             <Box>
-                                                                <Text fontWeight="bold">{user.name}</Text>
+                                                                <ChakraLink color="purple.400" onMouseEnter={() => handlePrefetchUser(user.id)}>
+                                                                    <Text fontWeight="bold">{user.name}</Text>
+                                                                </ChakraLink>
                                                                 <Text fontWeight="bold">{user.email}</Text>
                                                             </Box>
                                                         </Td>
@@ -121,7 +122,11 @@ export default function UserList() {
                                         </Tbody>
                                     </Table>
 
-                                    <Pagination />
+                                    <Pagination 
+                                    totalCountOfRegisters={data.totalCount}
+                                    currentPage={page}
+                                    onPageChange={setPage}
+                                    />
                                 </>
                     )}
                 </Box>
@@ -129,3 +134,4 @@ export default function UserList() {
         </Box>
     )
 }
+
